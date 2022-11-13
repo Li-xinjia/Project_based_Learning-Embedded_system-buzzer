@@ -43,6 +43,9 @@
 // as the example is running.
 //
 //*****************************************************************************
+bool buzzer_on = false;
+uint32_t now_voice = O4G;
+
 void initConsole(void) {
     // Enable GPIO port A which is used for UART0 pins.
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
@@ -61,6 +64,14 @@ void initConsole(void) {
 }
 
 void initInterruptPins(void) {
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
+    GPIODirModeSet(GPIO_PORTF_BASE, INT_ALL_BUTTONS, GPIO_DIR_MODE_IN);
+    GPIOPadConfigSet(GPIO_PORTF_BASE, INT_ALL_BUTTONS,
+                     GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
+    GPIOIntClear(GPIO_PORTF_BASE,INT_ALL_BUTTONS);
+
+
+    UARTprintf("Inter\n");
 }
 
 //*****************************************************************************
@@ -78,43 +89,73 @@ void SysTickIntHandler(void) {
          * The 3rd param of denotes values to be written in bit pattern.
          * What really written to GPIO pins is a logical AND of 2nd and 3rd params.
          */
-        GPIOPinWrite(GPIO_PORTF_BASE, LED_RED, led_color);
+        GPIOPinWrite(GPIO_PORTF_BASE,LED_RED,led_color);
     }
     tick_count++;
 }
 
 void SW1PinIntHandler(void) {
+    GPIOIntDisable(GPIO_PORTF_BASE,INT_ALL_BUTTONS);
+    GPIOIntClear(GPIO_PORTF_BASE,INT_ALL_BUTTONS);
+    UARTprintf("%d\n",now_voice);
+    if(!buzzer_on){
+        switch(now_voice){
+            case O4C:
+                now_voice = O4D;
+                break;
+            case O4D:
+                now_voice = O4E;
+                break;
+            case O4E:
+                now_voice = O4F;
+                break;
+            case O4F:
+                now_voice = O4G;
+                break;
+            case O4G:
+                now_voice = O4C;
+                break;
+        }
+//        now_voice = now_voice>>1;
+        PWMGenPeriodSet(PWM0_BASE, PWM_GEN_1, now_voice);
+        PWMPulseWidthSet(PWM0_BASE, PWM_OUT_3, now_voice/2);
+        PWMOutputState(PWM0_BASE, PWM_OUT_3_BIT, true);
+    }else{
+        PWMOutputState(PWM0_BASE, PWM_OUT_3_BIT, false);
+    }
+    buzzer_on = !buzzer_on;
+    GPIOIntEnable(GPIO_PORTF_BASE,INT_ALL_BUTTONS);
 }
 
 int main(void) {
     // Set the clocking to run directly from the crystal.
     ROM_SysCtlClockSet(SYSCTL_SYSDIV_1 | SYSCTL_USE_OSC | SYSCTL_OSC_MAIN |
                        SYSCTL_XTAL_16MHZ);
+
+    // Initialize console
+    initConsole();
+    UARTprintf("Buzzer!\n");
+
     // Set up ports hardware (see periphConf.c)
     PortFunctionInit();
 
     // Set up interrupts (you can specify GPIO interrupt initialization here)
     initInterruptPins();
 
-    // Initialize console
-    initConsole();
-    UARTprintf("Buzzer!\n");
-
+    // Initialize buzzer
     initBuzzer();
 
     // toneBuzzer(O4C);
     PWMGenPeriodSet(PWM0_BASE, PWM_GEN_1, O4C);
-    PWMPulseWidthSet(PWM0_BASE, PWM_OUT_3, O4C >> 1);
-    PWMOutputState(PWM0_BASE, PWM_OUT_3_BIT, true);
-    delay_ms(1000);
-    // restBuzzer();
-    PWMOutputState(PWM0_BASE, PWM_OUT_3_BIT, false);
+    PWMPulseWidthSet(PWM0_BASE, PWM_OUT_3, O4C/2);
+
+    GPIOIntRegister(GPIO_PORTF_BASE,SW1PinIntHandler);
+    GPIOIntEnable(GPIO_PORTF_BASE,INT_ALL_BUTTONS);
 
     SysTickPeriodSet(SysCtlClockGet() / SYSTICKS_PER_SEC);
     SysTickEnable();
     SysTickIntRegister(SysTickIntHandler);
     SysTickIntEnable();
 
-    while (1);
+    while(1);
 }
-
