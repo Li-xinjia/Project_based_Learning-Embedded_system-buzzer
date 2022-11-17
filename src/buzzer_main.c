@@ -43,8 +43,7 @@
 // as the example is running.
 //
 //*****************************************************************************
-bool buzzer_on = false;
-uint32_t now_voice = O4G;
+
 
 void initConsole(void) {
     // Enable GPIO port A which is used for UART0 pins.
@@ -95,9 +94,12 @@ void SysTickIntHandler(void) {
 }
 
 void SW1PinIntHandler(void) {
+    static bool buzzer_on = false;
+    static uint32_t now_voice = O4G;
+
     GPIOIntDisable(GPIO_PORTF_BASE,INT_ALL_BUTTONS);
     GPIOIntClear(GPIO_PORTF_BASE,INT_ALL_BUTTONS);
-    UARTprintf("%d\n",now_voice);
+    UARTprintf("Now voice: %d\n",now_voice);
     if(!buzzer_on){
         switch(now_voice){
             case O4C:
@@ -116,12 +118,10 @@ void SW1PinIntHandler(void) {
                 now_voice = O4C;
                 break;
         }
-//        now_voice = now_voice>>1;
-        PWMGenPeriodSet(PWM0_BASE, PWM_GEN_1, now_voice);
-        PWMPulseWidthSet(PWM0_BASE, PWM_OUT_3, now_voice/2);
-        PWMOutputState(PWM0_BASE, PWM_OUT_3_BIT, true);
+
+        toneBuzzer(now_voice);
     }else{
-        PWMOutputState(PWM0_BASE, PWM_OUT_3_BIT, false);
+        restBuzzer();
     }
     buzzer_on = !buzzer_on;
     GPIOIntEnable(GPIO_PORTF_BASE,INT_ALL_BUTTONS);
